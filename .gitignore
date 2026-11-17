@@ -1,0 +1,13 @@
+data/*.csv
+
+target/
+dbt_packages/
+logs/
+
+*.json
+profiles.yml
+.env
+
+__pycache__/
+*.pyc
+.venv/
