@@ -62,6 +62,32 @@ Tests check that patient IDs are unique, scores stay inside the PHQ-9 (0-27)
 and GAD-7 (0-21) ranges, there's only one row per patient per session, and
 every session belongs to a known patient.
 
+### Marts
+
+- `process_measures`: one row per treated patient, built from the sessions
+  table. Attendance rate, sessions attended in the first three, whether the
+  patient was engaged early (attended 2 of the first 3), PHQ-9 change over
+  those early sessions, and the longest run of missed sessions.
+- `outcome_features`: score changes and the NHS Talking Therapies outcome
+  flags (reliable improvement, reliable deterioration, recovery, reliable
+  recovery). These are worked out from the scores using the published
+  definitions rather than copied from the source data. Recovery is left null
+  for patients who weren't at caseness to begin with, since it doesn't apply
+  to them.
+- `patient_model_table`: the table the model uses. One row per treated
+  patient, with the dropout target and only the predictors that would be
+  known by the third session.
+
+That last restriction matters. Total attendance or the last session attended
+would predict dropout almost perfectly, but only because they're partly a
+record of the dropout itself. They stay in `process_measures` for describing
+the data and are kept out of the model table.
+
+The thresholds (caseness, reliable change, the three-session window) are dbt
+variables in `dbt_project.yml`, so they're set in one place. There's also a
+test checking that attendance counted from the sessions table matches the
+patient-level counts.
+
 ## Layout
 
 ```
@@ -69,5 +95,5 @@ therapy-outcomes/
 ├── generator/   data generator
 ├── data/        generated CSVs (not committed)
 ├── scripts/     BigQuery load script
-└── dbt/         dbt project (staging models so far)
+└── dbt/         dbt project (staging and marts)
 ```

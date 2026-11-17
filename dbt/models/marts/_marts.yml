@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: process_measures
+    description: >
+      Per-patient attendance and engagement, built from the sessions table.
+      Whole-course columns (sessions_attended, attendance_rate,
+      last_attended_session, longest_gap) are partly caused by dropout, so
+      use them for description, not as dropout predictors.
+    columns:
+      - name: patient_id
+        data_tests: [unique, not_null]
+      - name: attendance_rate
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+      - name: early_sessions_attended
+        description: Sessions attended within the early window (first 3 by default).
+      - name: is_early_engaged
+        description: Attended at least 2 of the first 3 sessions.
+      - name: early_phq9_change
+        description: Change in PHQ-9 between the first and last attended session in the early window. Negative = improving. Null if fewer than 2 were attended.
+      - name: longest_gap
+        description: Most consecutive sessions missed between two attended ones.
+
+  - name: outcome_features
+    description: >
+      Score changes and NHS Talking Therapies outcome flags for patients who
+      started treatment, derived from the scores rather than taken from the
+      source data.
+    columns:
+      - name: patient_id
+        data_tests: [unique, not_null]
+      - name: has_reliable_improvement
+        description: Reliable drop on PHQ-9 (>=6) or GAD-7 (>=4), with no reliable rise on the other.
+      - name: has_reliable_deterioration
+        description: Reliable rise on either measure, with no reliable drop on the other.
+      - name: is_recovered
+        description: Started at caseness and finished below caseness on both measures. Null if not at caseness at baseline.
+      - name: is_reliably_recovered
+        description: Recovered and reliably improved. Null if not at caseness at baseline.
+
+  - name: patient_model_table
+    description: >
+      Modelling table. One row per patient who started treatment, with
+      predictors limited to what's known by the end of the early window.
+    columns:
+      - name: patient_id
+        data_tests: [unique, not_null]
+      - name: is_dropped_out
+        description: Target for the dropout model.
+        data_tests: [not_null]

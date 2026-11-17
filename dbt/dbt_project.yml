@@ -12,3 +12,12 @@ models:
       +materialized: view
     marts:
       +materialized: table
+
+vars:
+  # NHS Talking Therapies thresholds
+  phq9_caseness: 10
+  gad7_caseness: 8
+  phq9_reliable_change: 6
+  gad7_reliable_change: 4
+  # sessions counted as "early" for engagement and early-change features
+  early_window: 3
