@@ -1,0 +1,14 @@
+name: therapy_outcomes
+version: "1.0.0"
+profile: therapy_outcomes
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+models:
+  therapy_outcomes:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

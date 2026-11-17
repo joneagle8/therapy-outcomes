@@ -2,6 +2,8 @@ data/*.csv
 
 target/
 dbt_packages/
+dbt_internal_packages/
+.user.yml
 logs/
 
 *.json

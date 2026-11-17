@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: stg_patients
+    description: One row per referred patient.
+    columns:
+      - name: patient_id
+        data_tests:
+          - unique
+          - not_null
+      - name: baseline_phq9
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 27
+      - name: baseline_gad7
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 21
+      - name: is_referral_terminated
+        data_tests:
+          - not_null
+
+  - name: stg_sessions
+    description: One row per scheduled session. Only patients who started treatment appear here.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [patient_id, session_number]
+    columns:
+      - name: patient_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_patients')
+                field: patient_id
+      - name: phq9_score
+        description: Only recorded for attended sessions.
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 27
