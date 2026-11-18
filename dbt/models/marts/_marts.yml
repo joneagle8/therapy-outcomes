@@ -50,3 +50,26 @@ models:
       - name: is_dropped_out
         description: Target for the dropout model.
         data_tests: [not_null]
+
+  - name: dashboard_patients
+    description: >
+      One row per referred patient with readable labels, for Looker Studio.
+      Rate columns are 0/1 so charts can average them. dropped_out and
+      left_unimproved are null for patients who ended at referral; recovered
+      is null for patients who weren't at caseness.
+    columns:
+      - name: patient_id
+        data_tests: [unique, not_null]
+      - name: pathway
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Ended at referral', 'Completed', 'Left early, improved', 'Left early, not improved']
+
+  - name: dashboard_phq9_by_session
+    description: Average PHQ-9 at each session number by pathway, attended sessions only.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [session_number, pathway]
