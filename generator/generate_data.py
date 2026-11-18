@@ -34,6 +34,12 @@ CASENESS_GAD7 = 8
 RELIABLE_CHANGE_PHQ9 = 6   # min drop for reliable improvement
 RELIABLE_CHANGE_GAD7 = 4
 
+# Scales how much people improve over a full course. Tuned so recovery
+# (of those at caseness) comes out around 50%.
+MULT = 2.7
+# Chance that someone who's dropped below caseness stops coming early
+P_LEAVE_WHEN_BETTER = 0.25
+
 # Log-odds weights for the poor-outcome score. Positive = worse outcome.
 W = {
     "intercept": -0.35,
@@ -99,28 +105,59 @@ def generate(n_patients: int, seed: int):
     )
     p_poor = sigmoid(linpred + rng.normal(0, 0.4, n_patients))
 
-    # Dropout depends mostly on early engagement, partly on overall risk
-    p_dropout = sigmoid(-1.0 + 1.6 * early_disengage + 1.2 * (p_poor - 0.5))
-    dropped_out = rng.random(n_patients) < p_dropout
+    # How much each person would improve over the full course. Higher risk
+    # means less improvement. Scores move steadily towards this over the
+    # course, so anyone who leaves early keeps whatever they'd gained so far.
+    improve_frac_phq9 = np.clip(rng.normal(0.62, 0.2, n_patients) * (1 - p_poor) * MULT, 0, 1)
+    improve_frac_gad7 = np.clip(rng.normal(0.62, 0.2, n_patients) * (1 - p_poor) * MULT, 0, 1)
+    course_end_phq9 = baseline_phq9 * (1 - improve_frac_phq9)
+    course_end_gad7 = baseline_gad7 * (1 - improve_frac_gad7)
 
-    # Dropouts attend fewer of their offered sessions
-    attend_fraction = np.where(dropped_out,
-                               rng.uniform(0.1, 0.5, n_patients),
-                               rng.uniform(0.6, 1.0, n_patients))
-    sessions_attended = np.minimum(sessions_offered,
-                                   np.ceil(sessions_offered * attend_fraction)).astype(int)
-    sessions_attended = np.maximum(sessions_attended, 1)
+    # Two ways to leave early. Disengaging is driven by early engagement and
+    # overall risk. Separately, some people stop once they feel better: if
+    # their scores have dropped below caseness before the course ends, they
+    # may leave within a session or two. The source data doesn't record
+    # which kind of leaver someone is, just as real service data wouldn't.
+    p_disengage = sigmoid(-1.65 + 1.6 * early_disengage + 1.2 * (p_poor - 0.5))
+    disengaged = rng.random(n_patients) < p_disengage
 
-    # Final scores. Higher risk means less improvement, and dropouts improve
-    # less again. The 2.3 multiplier was tuned to get ~50% recovery and ~60%
-    # reliable improvement.
-    improve_frac_phq9 = np.clip(rng.normal(0.62, 0.2, n_patients) * (1 - p_poor) * 2.3, 0, 1)
-    improve_frac_gad7 = np.clip(rng.normal(0.62, 0.2, n_patients) * (1 - p_poor) * 2.3, 0, 1)
-    improve_frac_phq9 = np.where(dropped_out, improve_frac_phq9 * 0.4, improve_frac_phq9)
-    improve_frac_gad7 = np.where(dropped_out, improve_frac_gad7 * 0.4, improve_frac_gad7)
+    attendance = []
+    stopped_at = np.zeros(n_patients, dtype=int)
+    left_improved = np.zeros(n_patients, dtype=bool)
+    for i in range(n_patients):
+        n_off = sessions_offered[i]
+        if disengaged[i]:
+            lo, hi = (0.05, 0.3) if early_disengage[i] else (0.25, 0.85)
+            last = int(np.clip(round(n_off * rng.uniform(lo, hi)), 1, n_off - 1))
+            p_attend = 0.6 if early_disengage[i] else 0.85
+        else:
+            last = n_off
+            p_attend = 0.65 if early_disengage[i] else 0.92
+            # first session at which they'd be below caseness on both measures
+            frac = np.arange(n_off) / (n_off - 1)
+            phq = baseline_phq9[i] + (course_end_phq9[i] - baseline_phq9[i]) * frac
+            gad = baseline_gad7[i] + (course_end_gad7[i] - baseline_gad7[i]) * frac
+            below = np.flatnonzero((phq < CASENESS_PHQ9) & (gad < CASENESS_GAD7))
+            if len(below) and rng.random() < P_LEAVE_WHEN_BETTER:
+                leave = below[0] + 1 + rng.integers(0, 2)
+                if leave < n_off:
+                    last = leave
+                    left_improved[i] = True
+        att = np.zeros(n_off, dtype=bool)
+        att[:last] = rng.random(last) < p_attend
+        att[0] = True
+        att[last - 1] = True
+        attendance.append(att)
+        stopped_at[i] = last
+    sessions_attended = np.array([a.sum() for a in attendance])
+    dropped_out = disengaged | left_improved
 
-    final_phq9 = np.clip((baseline_phq9 * (1 - improve_frac_phq9)).round(), 0, PHQ9_MAX).astype(int)
-    final_gad7 = np.clip((baseline_gad7 * (1 - improve_frac_gad7)).round(), 0, GAD7_MAX).astype(int)
+    # Final score = where they'd got to on their trajectory when they stopped
+    course_frac = (stopped_at - 1) / (sessions_offered - 1)
+    final_phq9 = np.clip((baseline_phq9 + (course_end_phq9 - baseline_phq9) * course_frac).round(),
+                         0, PHQ9_MAX).astype(int)
+    final_gad7 = np.clip((baseline_gad7 + (course_end_gad7 - baseline_gad7) * course_frac).round(),
+                         0, GAD7_MAX).astype(int)
 
     # Outcome flags
     at_caseness = (baseline_phq9 >= CASENESS_PHQ9) | (baseline_gad7 >= CASENESS_GAD7)
@@ -168,19 +205,26 @@ def generate(n_patients: int, seed: int):
     # Sessions table
     rows = []
     treated = patients[~patients["referral_terminated"]]
-    for _, p in treated.iterrows():
-        n_off = int(p["sessions_offered"])
-        n_att = int(p["sessions_attended"])
-        attended_idx = set(rng.choice(np.arange(1, n_off + 1), size=n_att, replace=False))
-        # Score moves in a straight line from baseline to final
+    for idx, p in treated.iterrows():
+        att = attendance[idx]
+        n_off = len(att)
+        last = int(np.flatnonzero(att)[-1]) + 1
+        base, final = p["baseline_phq9"], p["final_phq9"]
+        # Scores trend from baseline at session 1 to final at the last attended
+        # session, with some session-to-session noise in between
         for s in range(1, n_off + 1):
-            attended = s in attended_idx
-            frac = (s - 1) / max(n_off - 1, 1)
-            phq9_s = round(p["baseline_phq9"] + (p["final_phq9"] - p["baseline_phq9"]) * frac) if attended else np.nan
+            if att[s - 1]:
+                frac = (s - 1) / max(last - 1, 1)
+                score = base + (final - base) * frac
+                if 1 < s < last:
+                    score += rng.normal(0, 1.5)
+                phq9_s = int(np.clip(round(score), 0, PHQ9_MAX))
+            else:
+                phq9_s = np.nan
             rows.append({
                 "patient_id": int(p["patient_id"]),
                 "session_number": s,
-                "attended": attended,
+                "attended": bool(att[s - 1]),
                 "phq9_score": phq9_s,
             })
     sessions = pd.DataFrame(rows)
@@ -208,8 +252,8 @@ def main():
     print(f"{len(sessions)} sessions written to {s_path}")
     print()
     print(f"Ended at referral:     {patients['referral_terminated'].mean():.1%}  (target 20%)")
-    print(f"Recovery:              {treated['recovery'].mean():.1%}  (target 50%)")
-    print(f"Reliable improvement:  {treated['reliable_improvement'].mean():.1%}  (target 60%)")
+    print(f"Recovery:              {treated[treated['at_caseness']]['recovery'].mean():.1%}  (target 50%, of those at caseness)")
+    print(f"Reliable improvement:  {treated['reliable_improvement'].mean():.1%}  (target 60%; runs high)")
     print(f"Dropout:               {treated['dropped_out'].mean():.1%}")
     print("\nRecovery rate with / without each risk factor:")
     for col in ["unemployed", "on_benefits", "disability_ltc", "psychotropic_med"]:

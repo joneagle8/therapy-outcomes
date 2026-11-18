@@ -33,6 +33,26 @@ following treatment in UK NHS Talking Therapies* (medRxiv, v2).
 - Target rates: about 50% recovery, 60% reliable improvement, and 20% of
   referrals ending before treatment starts.
 
+Reliable improvement comes out higher than targeted, at about 72%. Recovery
+and reliable improvement are tuned with the same setting, and I prioritised
+getting recovery right.
+
+### How dropout works in the generator
+
+Each patient has a steady rate of improvement over their whole course of
+therapy. People can leave early in two ways:
+
+- **Disengaging.** More likely for people who engage poorly in the early
+  sessions and for people with more risk factors. They attend up to a point,
+  then stop, and keep whatever improvement they'd made by then.
+- **Leaving because they feel better.** Some people whose scores drop below
+  caseness before the end of the course stop coming within a session or two.
+
+Both count as dropout, and the data doesn't record which kind of leaver
+someone is, because real service data usually doesn't either. So dropout
+isn't always a bad outcome: about a third of the people who dropped out
+had recovered. That matters when interpreting what predicts dropout.
+
 Their models got an AUC of roughly 0.63 to 0.77. A model trained on this data
 will probably do better, because simulated data is cleaner than real records.
 
