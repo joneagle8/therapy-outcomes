@@ -25,6 +25,14 @@ models:
       - name: is_referral_terminated
         data_tests:
           - not_null
+      - name: imd_decile
+        description: Index of Multiple Deprivation decile of home area. 1 = most deprived.
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 10
 
   - name: stg_sessions
     description: One row per scheduled session. Only patients who started treatment appear here.

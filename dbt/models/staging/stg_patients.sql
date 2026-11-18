@@ -8,6 +8,8 @@ select
     female as is_female,
     ethnicity,
     religion,
+    imd_decile,
+    limited_english as has_limited_english,
     unemployed as is_unemployed,
     on_benefits as is_on_benefits,
     disability_ltc as has_disability_ltc,
