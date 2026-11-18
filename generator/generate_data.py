@@ -56,8 +56,15 @@ RELIABLE_CHANGE_GAD7 = 4
 
 # Chance of responding to therapy, scaled by (1 - risk). Tuned so the
 # per-measure outcome rates land near the paper's.
-RESPOND_PHQ9 = 2.35
-RESPOND_GAD7 = 2.5
+RESPOND_PHQ9 = 2.4
+RESPOND_GAD7 = 2.8
+# Correlation between baseline PHQ-9 and GAD-7 before rounding/clipping
+PHQ_GAD_CORR = 0.80
+# Base rates for unemployment and benefits before the disability and
+# deprivation multipliers. Tuned to keep overall rates at ~22% and ~18%.
+U_BASE = 0.16
+B_BASE = 0.093
+
 # Chance that someone who's dropped below caseness stops coming early
 P_LEAVE_WHEN_BETTER = 0.25
 
@@ -81,7 +88,7 @@ W = {
 # completion odds ratios: 18-24 ~0.5, 25-35 ~0.7, male ~0.8, and a steady
 # gradient of ~2.5x across deprivation deciles.
 DISENGAGE = {
-    "intercept": -2.1,
+    "intercept": -2.25,
     "early_disengage": 1.6,
     "risk": 1.2,
     "under_25": 0.65,
@@ -125,15 +132,24 @@ def generate(n_patients: int, seed: int):
     dep_factor = np.interp(imd_decile, [1, 10], [1.5, 0.5])
     dep_centred = 5.5 - imd_decile   # positive = more deprived than average
 
-    # Risk factors
-    unemployed = rng.random(n_patients) < 0.22 * dep_factor
-    on_benefits = rng.random(n_patients) < 0.18 * dep_factor
+    # Risk factors. Disability or a long-term condition makes unemployment
+    # more likely, and both make benefits more likely, on top of the link to
+    # deprivation. In UK data most out-of-work benefit claims are for
+    # disability or long-term conditions (Health Foundation, LFS 2023).
+    # Overall rates stay at about 20% disability/LTC, 22% unemployed and 18%
+    # on benefits. Medication is independent, as I found no source linking it
+    # to the others.
     disability_ltc = rng.random(n_patients) < 0.20
+    unemployed = rng.random(n_patients) < U_BASE * dep_factor * np.where(disability_ltc, 2.5, 1.0)
+    on_benefits = rng.random(n_patients) < B_BASE * dep_factor * (1 + 2.0 * unemployed + 2.0 * disability_ltc)
     psychotropic_med = rng.random(n_patients) < 0.30
 
-    # Baseline scores. Most referrals are above caseness.
-    baseline_phq9 = np.clip(rng.normal(15, 5, n_patients), 0, PHQ9_MAX).round().astype(int)
-    baseline_gad7 = np.clip(rng.normal(12, 4, n_patients), 0, GAD7_MAX).round().astype(int)
+    # Baseline scores, drawn together so depression and anxiety are strongly
+    # correlated. Ryan et al. (2013) found r = 0.74 at first contact in a large
+    # London IAPT sample; I've set it slightly higher, at about 0.8.
+    z = rng.multivariate_normal([0, 0], [[1, PHQ_GAD_CORR], [PHQ_GAD_CORR, 1]], n_patients)
+    baseline_phq9 = np.clip(15 + 5 * z[:, 0], 0, PHQ9_MAX).round().astype(int)
+    baseline_gad7 = np.clip(12 + 4 * z[:, 1], 0, GAD7_MAX).round().astype(int)
     baseline_sev_z = (baseline_phq9 - 15) / 5.0
 
     # About 20% of referrals end at assessment and never start treatment.

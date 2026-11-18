@@ -57,15 +57,33 @@ self-referral, assessment, and getting into treatment. The patients modelled
 here have already got past those. Religion and language affect dropout only
 through outcomes.
 
+**How the predictors relate to each other.** Real predictors overlap, so
+the generated ones do too:
+
+- Baseline PHQ-9 and GAD-7 are correlated at about 0.8. Ryan et al. (2013),
+  [Factorial invariance of the PHQ and GAD questionnaires](https://doi.org/10.1111/bjc.12028)
+  (*British Journal of Clinical Psychology*), found r = 0.74 at first contact
+  in about 18,500 London IAPT patients. I've set it slightly higher.
+- Disability or a long-term condition makes unemployment more likely (42%
+  vs 18%), and both make benefits more likely. In UK data most out-of-work
+  benefit claims are for disability or long-term conditions
+  ([Health Foundation, Labour Force Survey 2023](https://www.health.org.uk/resources-and-toolkits/data-tools/evidence-hub/health-conditions-among-working-age-people)).
+  Those are general population figures, so they guide the direction and
+  rough strength rather than exact values.
+- Unemployment and benefits are more common in deprived areas.
+- Being Muslim and limited English are more common in some ethnic groups.
+- Psychotropic medication is independent of the others. I couldn't find a
+  source linking it to severity in this population.
+
 **Calibration.** The generator's own summary compares its outcome rates
 with the paper's, per measure:
 
 | | Reliable improvement | Recovery | Reliable recovery |
 |---|---|---|---|
-| Depression (PHQ-9) | 49.1% (paper 47.8%) | 57.0% (55.7%) | 45.5% (46.9%) |
-| Anxiety (GAD-7) | 55.8% (57.9%) | 53.2% (52.9%) | 45.9% (49.2%) |
+| Depression (PHQ-9) | 50.9% (paper 47.8%) | 57.7% (55.7%) | 47.6% (46.9%) |
+| Anxiety (GAD-7) | 55.0% (57.9%) | 54.5% (52.9%) | 46.2% (49.2%) |
 
-Dropout is 39%, and 20% of referrals end before treatment starts. Kanso's
+Dropout is 38%, and 20% of referrals end before treatment starts. Kanso's
 models reached an AUC of roughly 0.63 to 0.77.
 
 ### How improvement and dropout work in the generator
@@ -84,7 +102,7 @@ gained by then. People can leave early in two ways:
 
 Both count as dropout, and the data doesn't record which kind of leaver
 someone is, because real service data usually doesn't either. So dropout
-isn't always a bad outcome: about 38% of the people who dropped out had
+isn't always a bad outcome: about 35% of the people who dropped out had
 reliably improved. That matters when interpreting what predicts dropout.
 
 ## BigQuery and dbt
@@ -152,9 +170,9 @@ language and deprivation groups.
 Main findings:
 
 - Attendance in the first three sessions is by far the strongest predictor.
-  Each extra session attended cuts the odds of dropping out by about 60%.
+  Each extra session attended cuts the odds of dropping out by about 63%.
 - Age, sex and deprivation come through clearly, in line with Burke et al.
-  Under-25s have about 1.6 times the odds of dropping out compared with
+  Under-25s have about 1.5 times the odds of dropping out compared with
   over-35s.
 - The paper's social and cultural predictors (unemployment, benefits,
   disability, limited English, being Muslim, ethnicity) matter for leaving
@@ -163,13 +181,14 @@ Main findings:
   two kinds of leaver cancel each other out.
 - Most of these effects are too small to measure reliably with about 4,000
   patients. A final section regenerates 60,000 patients with the same
-  settings and shows the true sizes. For example, ethnic minority patients
-  have about 1.15 times the odds of leaving unimproved, which the main data
-  estimates correctly but can't distinguish from no effect. It also shows the
-  main data overstating the sex effect. So a null result in a small or
+  settings and shows the true sizes: each of the paper's predictors raises
+  the odds of leaving unimproved by about 1.07 to 1.14. The main data
+  misses all of them, and gets some the wrong way round. For example, it
+  puts ethnic minority patients at 1.02 against a true 1.12. So a null result in a small or
   coarse comparison isn't evidence of no effect.
-- Test AUC is 0.65 to 0.69 for any dropout and 0.72 to 0.74 for dropout
-  without improvement, similar to Kanso et al.'s models on real data.
+- Test AUC is 0.61 to 0.63 for any dropout and 0.76 to 0.78 for dropout
+  without improvement, within the range of Kanso et al.'s models on real
+  data.
 
 To run it:
 
