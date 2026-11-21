@@ -8,6 +8,58 @@ and roughly the same outcome rates and predictors as the published research.
 That means the results here show the pipeline and the method working. They
 aren't new clinical findings.
 
+## Key findings
+
+- **Not all dropout is bad.** 38% of people who started treatment left
+  early, but about a third of them had already reliably improved. Treating
+  every early leaver as a failure hides the group that matters: the quarter
+  of patients who leave without improving.
+
+- **Missed early sessions are the clearest warning sign.** 80% of people who
+  came to only one of their first three sessions left early, against 30% of
+  those who came to all three. But 69% of that first group had already
+  stopped coming by session 3. Among people who came back after session 3
+  the gap is much smaller (37% against 27%). So a missed early session
+  mostly means someone has gone or is about to, which is worth chasing
+  quickly. A flat PHQ-9 score over those sessions flags leaving without
+  improving.
+
+- **Younger people, men and people in more deprived areas leave more often**,
+  in line with Burke et al. (2025). Under-25s have about 1.5 times the odds
+  of dropping out compared with over-35s.
+
+- **The social and cultural predictors of poorer recovery**, such as
+  unemployment, benefits, limited English and ethnicity, **make leaving
+  without improving more likely**, but the effects are small. Most of them
+  make no difference to dropout overall, because people who are doing worse
+  are also less likely to leave because they feel better, so the two cancel
+  out. Ethnicity is the exception, because I gave it a small direct effect
+  on dropout (about 1.1 times the odds). With 4,000 patients none of these
+  effects is detectable. It takes a 60,000-patient run to show their true
+  size, a reminder that a null result in a small sample isn't evidence of no
+  effect.
+
+- **A model built on what's known by session 3** reaches an AUC of 0.65 for
+  any dropout, in line with Shipman and Ushakova's (2026) dropout model on
+  real NHS Talking Therapies data, and 0.76 to 0.80 for leaving without
+  improving. Much of that comes from people who had already stopped coming.
+  For people still attending after session 3 it falls to about 0.55 and
+  0.62 to 0.68.
+
+Read more:
+
+- [Plain-language write-up](analysis/WRITEUP.md), for a non-technical reader
+- [Analysis notebook](analysis/dropout_model.ipynb), with the full method,
+  charts and checks
+
+## How it works
+
+```
+generator (Python) -> CSVs -> BigQuery (raw) -> dbt (staging, marts, tests)
+                                                   -> notebook (scikit-learn, statsmodels)
+                                                   -> dashboard (Looker Studio, in progress)
+```
+
 ## Data
 
 Two tables:
@@ -31,12 +83,20 @@ models **outcomes**. It doesn't model dropout. So the generator draws on two
 sources, plus some assumptions of my own.
 
 **Outcomes (Kanso et al.).** Each predictor raises the chance of a poor
-outcome, weighted roughly in the paper's order of importance: unemployment,
-limited English, benefits, psychotropic medication, disability or long-term
-condition, being Muslim, baseline severity, and a small effect for ethnic
-minority groups. The paper ranks predictors but doesn't give a direction for
-each, so I've followed the earlier research it cites, in which minority
-groups tend to do worse.
+outcome. The paper shows the size of each predictor's coefficient in its
+models (Figures 1 and 2). Baseline severity has the biggest: being a
+depression case (1.18) and PHQ-9 score (0.93) in the depression reliable
+improvement model, and similar for anxiety, against 0.1 to 0.4 for
+everything else. It sits lower in their averaged ranking only because it
+wasn't selected for reliable recovery. So the generator gives severity the
+largest weight. Next come unemployment, limited English and benefits, then
+disability or long-term condition, psychotropic medication and being
+Muslim, with a smaller effect for ethnic minority groups. That roughly
+follows the paper's order. Disability is a little higher than the paper
+has it, because the paper's top predictor, unemployment due to sickness or
+disability, combines the two. The paper gives sizes but not directions, so
+I've followed the earlier research it cites, in which these groups tend to
+do worse.
 
 **Dropout (Burke et al., 2025).** [Recovery, completion and further
 referral after IAPT in Norfolk and Waveney](https://doi.org/10.1192/bjo.2025.10045)
@@ -46,16 +106,17 @@ generator gives these a direct effect on dropout, scaled roughly from that
 paper's odds ratios. It also adds an IMD deprivation decile, with
 unemployment and benefits more common in deprived areas.
 
-**Ethnicity and dropout (my assumption).** Burke found no ethnicity effect on
-completion, but compared only White British patients with everyone else, in
-a mostly White British area. Kanso, with a much more diverse sample, names
-ethnicity as a key predictor of outcomes. I've extended that to a small
-direct effect on dropout. It's kept small for two reasons. Burke's "not
-completed" also counts people who declined before treatment started. And
-Harwood et al. (2023) found the ethnic gaps are mainly at the access stages:
-self-referral, assessment, and getting into treatment. The patients modelled
-here have already got past those. Religion and language affect dropout only
-through outcomes.
+**Ethnicity and dropout (my assumption).** Kanso, with a much more diverse
+sample, names ethnicity as a key predictor of outcomes. Burke found only a
+small, non-significant difference in completion, but compared White
+British patients with everyone else in a mostly White British area. I've
+extended Kanso's finding to a small direct effect on dropout, about 1.1
+times the odds. It's kept small because Burke's "not completed" also counts
+people who declined before treatment started, and Harwood et al. (2023)
+found the ethnic gaps are mainly at the access stages (self-referral,
+assessment, getting into treatment), which the patients modelled here have
+already got past. Religion and language affect dropout only through
+outcomes.
 
 **How the predictors relate to each other.** Real predictors overlap, so
 the generated ones do too:
@@ -152,6 +213,15 @@ would predict dropout almost perfectly, but only because they're partly a
 record of the dropout itself. They stay in `process_measures` for describing
 the data and are kept out of the model table.
 
+Two more marts feed the dashboard:
+
+- `dashboard_patients`: one row per referred patient with readable labels
+  (age band, deprivation band, ethnic group, and so on) and a `pathway`
+  column: ended at referral, completed, left early and improved, or left
+  early without improving. Rates are 0/1 columns so charts can average them.
+- `dashboard_phq9_by_session`: average PHQ-9 at each session number for each
+  pathway, for a trajectory chart.
+
 The thresholds (caseness, reliable change, the three-session window) are dbt
 variables in `dbt_project.yml`, so they're set in one place. There's also a
 test checking that attendance counted from the sessions table matches the
@@ -163,32 +233,15 @@ patient-level counts.
 `patient_model_table` from BigQuery and models dropout two ways: any dropout,
 and dropout without reliable improvement. Each gets a logistic regression
 for odds ratios, an elastic net to match Kanso et al.'s method, and a
-gradient-boosted model, all tested on a held-out 25% of patients. It ends
-with a check that the model works equally well across ethnic, religious,
-language and deprivation groups.
-
-Main findings:
-
-- Attendance in the first three sessions is by far the strongest predictor.
-  Each extra session attended cuts the odds of dropping out by about 63%.
-- Age, sex and deprivation come through clearly, in line with Burke et al.
-  Under-25s have about 1.5 times the odds of dropping out compared with
-  over-35s.
-- The paper's social and cultural predictors (unemployment, benefits,
-  disability, limited English, being Muslim, ethnicity) matter for leaving
-  without improving, not for dropout as a whole. They make recovery less
-  likely, so fewer of these patients leave because they feel better, and the
-  two kinds of leaver cancel each other out.
-- Most of these effects are too small to measure reliably with about 4,000
-  patients. A final section regenerates 60,000 patients with the same
-  settings and shows the true sizes: each of the paper's predictors raises
-  the odds of leaving unimproved by about 1.07 to 1.14. The main data
-  misses all of them, and gets some the wrong way round. For example, it
-  puts ethnic minority patients at 1.02 against a true 1.12. So a null result in a small or
-  coarse comparison isn't evidence of no effect.
-- Test AUC is 0.61 to 0.63 for any dropout and 0.76 to 0.78 for dropout
-  without improvement, within the range of Kanso et al.'s models on real
-  data.
+gradient-boosted model, all tested on a held-out 25% of patients. It then
+refits the models on just the people who came back after session 3, to
+separate real prediction from dropout that had already happened (this is
+the only place `process_measures` is used, to find those people). Next it
+checks that the model works equally well across ethnic, religious, language
+and deprivation groups. A final section regenerates 60,000 patients with the
+same settings and refits the model, to show which of the main results are
+real and which are small-sample noise. The findings are summarised at the
+top of this README and in [`analysis/WRITEUP.md`](analysis/WRITEUP.md).
 
 To run it:
 
@@ -209,5 +262,5 @@ therapy-outcomes/
 ├── data/        generated CSVs (not committed)
 ├── scripts/     BigQuery load script
 ├── dbt/         dbt project (staging and marts)
-└── analysis/    dropout model notebook
+└── analysis/    dropout model notebook and write-up
 ```

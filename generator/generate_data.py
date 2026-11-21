@@ -7,13 +7,11 @@ predictors and outcome rates are based on Kanso et al. (2026), "Building a
 prediction model for outcomes following treatment in UK NHS Talking Therapies",
 medRxiv v2: https://www.medrxiv.org/content/10.64898/2026.03.12.26348223v2
 
-Predictors of worse outcomes used here, roughly in the paper's order of
-importance: unemployment, limited English, benefits, psychotropic
-medication, disability/long-term condition, being Muslim, and baseline
-severity. The paper ranks these but doesn't give a direction for each, so
-directions follow the earlier research it cites (worse outcomes for
-minority groups). Ethnicity gets a small effect. The paper calls it a key
-predictor but doesn't rank it.
+Predictors of worse outcomes used here: baseline severity (the largest
+coefficients in the paper's Figures 1 and 2), then unemployment, limited
+English, benefits, disability/long-term condition, psychotropic
+medication and being Muslim. The paper gives coefficient sizes but not
+directions, so directions follow the earlier research it cites.
 
 The paper models outcomes, not dropout. Direct effects on dropping out
 come from Burke et al. (2025), "Recovery, completion and further referral
@@ -22,9 +20,9 @@ younger age, being male and living in a more deprived area all lower the
 odds of completing treatment.
 
 Ethnicity also gets a small direct dropout effect, extending Kanso's finding
-that it predicts outcomes. Burke found no ethnicity effect on completion,
-but compared only White British with everyone else, in a mostly White
-British area. I keep the effect small for two reasons. Burke's "not
+that it predicts outcomes. Burke compared only White British with everyone
+else, in a mostly White British area, and found slightly lower completion
+for "Other" (adjusted OR 0.94, not significant). I keep the effect small for two reasons. Burke's "not
 completed" includes people who declined before treatment started. And
 Harwood et al. (2023) found the ethnic gaps are mainly at access stages
 (self-referral, assessment, starting treatment), which the people modelled
