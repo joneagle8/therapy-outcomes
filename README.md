@@ -51,13 +51,15 @@ Read more:
 - [Plain-language write-up](analysis/WRITEUP.md), for a non-technical reader
 - [Analysis notebook](analysis/dropout_model.ipynb), with the full method,
   charts and checks
+- [Dashboard](https://datastudio.google.com/reporting/e33bf14c-6cee-49a3-95eb-92e713507232)
+  (Looker Studio), with dropout by group and early engagement
 
 ## How it works
 
 ```
 generator (Python) -> CSVs -> BigQuery (raw) -> dbt (staging, marts, tests)
                                                    -> notebook (scikit-learn, statsmodels)
-                                                   -> dashboard (Looker Studio, in progress)
+                                                   -> dashboard (Looker Studio)
 ```
 
 ## Data
